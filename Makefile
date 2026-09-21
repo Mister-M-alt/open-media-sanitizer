@@ -65,7 +65,7 @@ test: all build/device-probe build/oms-faults build/test-native
 	sh tests/test_devices.sh
 
 test-gui: all build/test-gui
-	xvfb-run -a -s '-screen 0 1280x900x24' ./build/test-gui
+	NO_AT_BRIDGE=1 xvfb-run -a -s '-screen 0 1280x900x24' ./build/test-gui
 
 clean:
 	rm -rf build
