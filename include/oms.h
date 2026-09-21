@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#define OMS_VERSION "0.2.0"
+#define OMS_VERSION "0.3.0"
 #define OMS_PATH_CAP 4096
 #define OMS_NAME_CAP 256
 #define OMS_MODEL_CAP 128

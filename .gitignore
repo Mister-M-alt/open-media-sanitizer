@@ -2,5 +2,5 @@
 *.o
 *.swp
 *~
-__pycache__/
-*.pyc
+/.image-cache/
+/image-output/

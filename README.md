@@ -1,6 +1,6 @@
 # Open Media Sanitizer
 
-Open Media Sanitizer is a Linux desktop workspace for selecting storage media, reviewing an erase operation, following its progress, and exporting a record. The desktop app uses native widgets with a slate-and-teal theme; no image or font assets are bundled. A small C command-line backend (`oms`) performs the writes and enforces target checks.
+Open Media Sanitizer is a native C Linux desktop workspace for selecting storage media, reviewing an erase operation, following its progress, and exporting a record. The GTK desktop (`oms-gui`), command-line backend (`oms`), and report generator are written in C. No Python application or interpreter is needed at runtime. The interface uses a slate-and-teal theme with no bundled image assets.
 
 The project is at an early stage. Use it only after reviewing the source and testing the workflow in an environment where data loss is acceptable.
 
@@ -12,13 +12,13 @@ Install the system dependencies once:
 
 ```sh
 # Debian / Ubuntu
-sudo apt install build-essential python3 python3-tk
+sudo apt install build-essential pkg-config libgtk-3-dev libjson-glib-dev
 
 # Arch Linux
-sudo pacman -S --needed base-devel python tk
+sudo pacman -S --needed base-devel pkgconf gtk3 json-glib
 
 # Fedora
-sudo dnf install gcc make python3 python3-tkinter
+sudo dnf install gcc make pkgconf-pkg-config gtk3-devel json-glib-devel
 ```
 
 From this checkout, open a working demonstration:
@@ -27,7 +27,7 @@ From this checkout, open a working demonstration:
 ./start.sh --demo
 ```
 
-The launcher builds the backend and opens the desktop window. No pip, npm,
+The launcher builds both C executables and opens the desktop window. No pip, npm,
 account, network service, or application installation is needed. Demo mode
 creates two disposable files and runs the real write and read-back verification
 code only on those files. They are removed when the app closes.
@@ -68,20 +68,20 @@ These checks reduce operator error, but they cannot make a destructive command r
 
 ## Build and test
 
-The backend requires a C11 compiler, GNU Make, and Linux kernel headers. Tests
-also use Python 3; the desktop app additionally requires system Tk.
+The backend requires a C11 compiler, GNU Make, and Linux kernel headers. The
+desktop and C tests also require GTK 3 and JSON-GLib development packages.
+Use `make cli` to build only the backend without graphical dependencies.
 
 ```sh
 make
 make test
 ```
 
-For graphical tests, install `python3-tk`, `xvfb`, and `xauth`, then run `make test-gui`.
+For graphical tests, install `xvfb` and `xauth`, then run `make test-gui`.
 The suite uses disposable files and simulated sysfs/proc data. It never writes
 to a physical block device.
 
-Install the CLI executable as `/usr/local/bin/oms` (the desktop can run directly
-from the checkout):
+Install both executables as `/usr/local/bin/oms` and `/usr/local/bin/oms-gui`:
 
 ```sh
 sudo make install
@@ -168,5 +168,5 @@ Licensed under either of the following, at your option:
 
 Unless you explicitly state otherwise, contributions intentionally submitted for inclusion in this project are licensed under the same terms.
 
-System components such as Python and Tk retain their own licenses and are not
+System components such as GTK and Linux retain their own licenses and are not
 bundled with this repository.

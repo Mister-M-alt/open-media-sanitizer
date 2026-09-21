@@ -9,8 +9,8 @@ Thank you for helping improve Open Media Sanitizer.
 3. Run `make test` before submitting a pull request.
 4. Explain any change that affects target selection, confirmation, write behavior, or verification.
 
-The desktop app uses Python's standard library and system Tk. Run `make test-gui`
-with `python3-tk`, Xvfb, and xauth installed to exercise selection, confirmation,
+The desktop app and report generation use C, GTK 3, and JSON-GLib. Run `make test-gui`
+with the development packages, Xvfb, and xauth installed to exercise selection, confirmation,
 navigation, and a real write-and-verify operation on disposable demo files.
 
 `make test` includes fixture-based device checks and injected I/O failures.

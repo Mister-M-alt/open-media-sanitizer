@@ -1,6 +1,6 @@
 # Code review and validation
 
-This review covers version 0.2.0 of the C backend and the native desktop app.
+This review covers version 0.3.0 of the C backend and the C desktop app.
 
 ## Corrected behavior
 
@@ -12,7 +12,7 @@ This review covers version 0.2.0 of the C backend and the native desktop app.
 | Writes | Short writes and EINTR are handled; zero progress, read EOF, verification mismatch, flush failure, close failure, and cancellation cannot report success. | Injected syscall outcomes using a test-only executable |
 | Progress | Percentage calculations avoid integer multiplication overflow. Explicit progress events feed the desktop app. | Multi-pass writes across a partial final buffer |
 | Inventory | Device details come from sysfs, so unprivileged users can see devices without opening them for I/O. Skipped entries produce a diagnostic. | Read-only manual inventory check and desktop demo |
-| Application | A single supervised subprocess performs writes. Confirmation is required; demo mode only permits its own files. Worker threads communicate through queues. | Application tests and Xvfb desktop tests |
+| Application | A single supervised subprocess performs writes. Confirmation is required; demo mode only permits its own files. GLib asynchronously drains progress and waits for exit before reporting completion. | C application tests and Xvfb desktop tests |
 | Reports | JSON and script-free HTML include outcomes and verification status. Untrusted text is escaped and exports use atomic replacement. | Report parsing, escaping, file permissions, and destination validation |
 
 ## Remaining limits
@@ -22,7 +22,7 @@ This review covers version 0.2.0 of the C backend and the native desktop app.
 - Regular-file locks are advisory. File mode is for controlled tests.
 - Firmware sanitization, cryptographic erasure, hidden areas, and remapped sectors are outside this implementation.
 - Read-back checks operate through the OS and device caches; they are not proof of physical sanitization.
-- The native desktop requires Linux, Python, Tk, and a graphical session. Report history is session-local unless exported.
+- The native desktop requires Linux, GTK 3, JSON-GLib, and a graphical session. Report history is session-local unless exported.
 
 ## Commands
 
