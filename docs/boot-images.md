@@ -1,5 +1,7 @@
 # Standalone boot media
 
+[Documentation index](README.md) · [Operator guide](operator-guide.md) · [Maintainer guide](maintenance.md)
+
 The image build produces a complete Linux system with the native C desktop and
 erase backend. It starts locally from USB or a virtual disk without an installed
 operating system, an account, a browser, or a network service.
@@ -115,6 +117,10 @@ Display logs are in `/tmp/oms-display.log`. Hardware without a supported DRM
 display driver may require a board-specific kernel or display configuration.
 The CLI remains available from the recovery console.
 
+See [troubleshooting](troubleshooting.md#boot-media-and-arm) for download,
+firmware, display, and missing-device problems. The
+[report guide](reports.md) explains export formats, retention, and outcome fields.
+
 ## Licenses
 
 The project's C code and build recipes are MIT OR Apache-2.0. The complete boot
@@ -125,3 +131,6 @@ Keep the dependency manifest, source bundles, Buildroot archive, build recipes,
 and dependency-source notes with any image distribution. Review Buildroot's
 `legal-info/README` for components it could not automatically collect. A generated
 manifest is not a declaration that all redistribution obligations are satisfied.
+
+The [maintainer guide](maintenance.md) provides a container command for source
+collection, an artifact inventory, and release validation steps.
