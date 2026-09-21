@@ -17,6 +17,12 @@ else
         echo "Install a C compiler and Make (Debian/Ubuntu: sudo apt install build-essential)." >&2
         exit 1
     fi
+    if ! command -v pkg-config >/dev/null 2>&1 || ! pkg-config --exists gtk+-3.0 json-glib-1.0; then
+        echo "Install the GTK 3 and JSON-GLib development packages before opening the app." >&2
+        echo "Debian/Ubuntu: sudo apt install pkg-config libgtk-3-dev libjson-glib-dev librsvg2-common shared-mime-info adwaita-icon-theme" >&2
+        echo "Arch: sudo pacman -S pkgconf gtk3 json-glib" >&2
+        exit 1
+    fi
     make --no-print-directory -C "$project_dir" all
 fi
 exec "$project_dir/build/oms-gui" "$@"

@@ -19,6 +19,12 @@
 
 #define OMS_BUFFER_SIZE (1024U * 1024U)
 
+/* The Linux ioctl ABI is stable. Older cross-toolchain headers may omit this
+ * definition even when the running kernel exports a disk sequence in sysfs. */
+#ifndef BLKGETDISKSEQ
+#define BLKGETDISKSEQ _IOR(0x12, 128, uint64_t)
+#endif
+
 static volatile sig_atomic_t interrupted = 0;
 static bool machine_progress = false;
 static unsigned int current_pass = 0U;
@@ -446,7 +452,6 @@ int oms_erase_target(const char *path,
             set_error(error, error_size, "the opened device size or write permissions changed");
             goto cleanup;
         }
-#ifdef BLKGETDISKSEQ
         if (target.disk_sequence != 0U) {
             unsigned long long disk_sequence = 0ULL;
             if (ioctl(descriptor, BLKGETDISKSEQ, &disk_sequence) != 0 ||
@@ -455,7 +460,6 @@ int oms_erase_target(const char *path,
                 goto cleanup;
             }
         }
-#endif
     } else if (flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
         set_error(error, error_size, "the test file is locked by another operation");
         goto cleanup;

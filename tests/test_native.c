@@ -155,6 +155,24 @@ static void test_patterns(void)
     g_assert_true(changed); g_free(contents);
 }
 
+static void test_inspection_timeout(void)
+{
+    char *stub = g_build_filename(workspace.demo_dir, "stalled-inspector", NULL);
+    g_assert_true(g_file_set_contents(stub, "#!/bin/sh\nexec sleep 30\n", -1, NULL));
+    g_assert_cmpint(g_chmod(stub, 0700), ==, 0);
+    char *saved = workspace.binary;
+    workspace.binary = stub;
+    GError *error = NULL;
+    gint64 started = g_get_monotonic_time();
+    g_assert_null(workspace_inventory(&workspace, &error));
+    g_assert_nonnull(error);
+    g_assert_nonnull(strstr(error->message, "timed out"));
+    g_assert_cmpint(g_get_monotonic_time() - started, <, 5 * G_TIME_SPAN_SECOND);
+    g_clear_error(&error);
+    workspace.binary = saved;
+    g_unlink(stub); g_free(stub);
+}
+
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
@@ -166,6 +184,7 @@ int main(int argc, char **argv)
     g_test_add_func("/native/file-guards", test_file_guards);
     g_test_add_func("/native/io-faults", test_faults);
     g_test_add_func("/native/patterns", test_patterns);
+    g_test_add_func("/native/inspection-timeout", test_inspection_timeout);
     int result = g_test_run();
     if (target) json_object_unref(target);
     workspace_clear(&workspace); g_free(binary); g_free(fault_binary);

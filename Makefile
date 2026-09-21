@@ -54,7 +54,7 @@ build/oms-faults: $(OBJECTS) tests/io_faults.c Makefile
 		-Wl,--wrap=pwrite64,--wrap=pread64,--wrap=__pread64_chk,--wrap=fsync,--wrap=close,--wrap=fstat64 -o $@
 
 build/test-native: tests/test_native.c src/workspace.c include/workspace.h Makefile | build
-	$(CC) $(PROJECT_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) $(GUI_CFLAGS) -std=c11 tests/test_native.c src/workspace.c $(LDFLAGS) $(GUI_LIBS) -o $@
+	$(CC) $(PROJECT_CPPFLAGS) $(CPPFLAGS) -DOMS_QUERY_TIMEOUT_MS=2000 $(CFLAGS) $(WARNINGS) $(GUI_CFLAGS) -std=c11 tests/test_native.c src/workspace.c $(LDFLAGS) $(GUI_LIBS) -o $@
 
 build/test-gui: tests/test_gui.c src/gui.c src/workspace.c include/workspace.h Makefile | build
 	$(CC) $(PROJECT_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) $(GUI_CFLAGS) -std=c11 tests/test_gui.c src/workspace.c $(LDFLAGS) $(GUI_LIBS) -o $@

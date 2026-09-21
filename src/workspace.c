@@ -45,21 +45,73 @@ void workspace_clear(Workspace *w)
     *w = (Workspace){0};
 }
 
+#ifndef OMS_QUERY_TIMEOUT_MS
+#define OMS_QUERY_TIMEOUT_MS 30000
+#endif
+
+typedef struct {
+    GMainLoop *loop;
+    GSubprocess *process;
+    GCancellable *cancel;
+    char *output, *diagnostic;
+    GError *error;
+    gboolean ok, timed_out;
+} Query;
+
+static gboolean query_timeout(gpointer data)
+{
+    Query *query = data;
+    query->timed_out = TRUE;
+    g_subprocess_force_exit(query->process);
+    g_cancellable_cancel(query->cancel);
+    return G_SOURCE_REMOVE;
+}
+
+static void query_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    Query *query = data;
+    query->ok = g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source), result,
+        &query->output, &query->diagnostic, &query->error);
+    g_main_loop_quit(query->loop);
+}
+
 static JsonNode *query(const char *const *argv, GError **error)
 {
     GSubprocess *process = g_subprocess_newv(argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
                                            G_SUBPROCESS_FLAGS_STDERR_PIPE, error);
     if (!process) return NULL;
-    char *output = NULL, *diagnostic = NULL;
-    gboolean ok = g_subprocess_communicate_utf8(process, NULL, NULL, &output, &diagnostic, error);
+    /* A private context avoids re-entering GTK callbacks while replacing the
+     * inventory, while still allowing the deadline to interrupt stalled I/O. */
+    GMainContext *context = g_main_context_new();
+    g_main_context_push_thread_default(context);
+    Query request = {.process = process, .loop = g_main_loop_new(context, FALSE), .cancel = g_cancellable_new()};
+    GSource *deadline = g_timeout_source_new(OMS_QUERY_TIMEOUT_MS);
+    g_source_set_callback(deadline, query_timeout, &request, NULL);
+    g_source_attach(deadline, context);
+    g_subprocess_communicate_utf8_async(process, NULL, request.cancel, query_done, &request);
+    g_main_loop_run(request.loop);
+    g_source_destroy(deadline); g_source_unref(deadline);
+    g_main_context_pop_thread_default(context);
+    g_main_loop_unref(request.loop); g_main_context_unref(context);
+    g_object_unref(request.cancel);
+    char *output = request.output, *diagnostic = request.diagnostic;
+    gboolean ok = request.ok;
+    if (request.timed_out) {
+        g_clear_error(&request.error);
+        fail(error, "Device inspection timed out. Check the device connection and retry.");
+        ok = FALSE;
+    } else if (request.error) g_propagate_error(error, request.error);
     if (ok && !g_subprocess_get_successful(process)) {
         fail(error, diagnostic && *diagnostic ? diagnostic : "Device inspection failed.");
         ok = FALSE;
     }
     JsonParser *parser = json_parser_new();
     JsonNode *node = NULL;
-    if (ok && json_parser_load_from_data(parser, output, -1, error))
-        node = json_node_copy(json_parser_get_root(parser));
+    if (ok && json_parser_load_from_data(parser, output, -1, error)) {
+        JsonNode *root = json_parser_get_root(parser);
+        if (root) node = json_node_copy(root);
+        else fail(error, "The backend returned an empty device inventory.");
+    }
     g_object_unref(parser);
     g_object_unref(process);
     g_free(output);

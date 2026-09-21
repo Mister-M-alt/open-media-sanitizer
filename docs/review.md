@@ -11,7 +11,7 @@ This review covers version 0.3.0 of the C backend and the C desktop app.
 | Confirmation | GUI confirmation includes an expected identity. Identity and size are checked again before writing, including the opened descriptor. Device sequence is checked when the kernel provides it. | Stale identity and injected descriptor-size change |
 | Writes | Short writes and EINTR are handled; zero progress, read EOF, verification mismatch, flush failure, close failure, and cancellation cannot report success. | Injected syscall outcomes using a test-only executable |
 | Progress | Percentage calculations avoid integer multiplication overflow. Explicit progress events feed the desktop app. | Multi-pass writes across a partial final buffer |
-| Inventory | Device details come from sysfs, so unprivileged users can see devices without opening them for I/O. Skipped entries produce a diagnostic. | Read-only manual inventory check and desktop demo |
+| Inventory | Device details come from sysfs, so unprivileged users can see devices without opening them for I/O. The desktop limits each inspection to 30 seconds. | Read-only manual inventory check, stalled-process timeout, and desktop demo |
 | Application | A single supervised subprocess performs writes. Confirmation is required; demo mode only permits its own files. GLib asynchronously drains progress and waits for exit before reporting completion. | C application tests and Xvfb desktop tests |
 | Reports | JSON and script-free HTML include outcomes and verification status. Untrusted text is escaped and exports use atomic replacement. | Report parsing, escaping, file permissions, and destination validation |
 

@@ -36,6 +36,7 @@ static GtkWidget *label(const char *text, const char *style)
     GtkWidget *widget = gtk_label_new(text);
     gtk_label_set_xalign(GTK_LABEL(widget), 0);
     gtk_label_set_line_wrap(GTK_LABEL(widget), TRUE);
+    gtk_label_set_line_wrap_mode(GTK_LABEL(widget), PANGO_WRAP_WORD_CHAR);
     if (style) gtk_style_context_add_class(gtk_widget_get_style_context(widget), style);
     return widget;
 }
@@ -63,7 +64,9 @@ static GtkWidget *table(GtkWidget *box, GtkListStore *model, const char *const *
     GtkWidget *view = gtk_tree_view_new_with_model(GTK_TREE_MODEL(model));
     for (int i = 0; i < columns; ++i) {
         GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+        g_object_set(renderer, "ellipsize", PANGO_ELLIPSIZE_MIDDLE, NULL);
         GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(titles[i], renderer, "text", i, NULL);
+        gtk_tree_view_column_set_min_width(column, i == 0 ? 180 : 80);
         gtk_tree_view_column_set_expand(column, i == 0);
         gtk_tree_view_column_set_resizable(column, TRUE);
         gtk_tree_view_append_column(GTK_TREE_VIEW(view), column);
@@ -336,6 +339,7 @@ static void build_window(App *app, gboolean fullscreen)
     app->media = gtk_list_store_new(5, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT);
     const char *columns[] = {"Target", "Model", "Capacity", "Status"};
     app->inventory = table(storage, app->media, columns, 4);
+    gtk_tree_view_set_tooltip_column(GTK_TREE_VIEW(app->inventory), 3);
     GtkWidget *settings = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 16);
     gtk_box_pack_start(GTK_BOX(storage), settings, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(settings), label("Write pattern", NULL), FALSE, FALSE, 0);
@@ -445,7 +449,9 @@ int main(int argc, char **argv)
     GError *error = NULL;
     if (!workspace_init(&app.workspace, binary, demo, &error)) {
         fprintf(stderr, "%s\n", error->message); g_error_free(error);
-        workspace_clear(&app.workspace); g_free(directory); g_free(binary); return 1;
+        workspace_clear(&app.workspace);
+        g_ptr_array_unref(app.history); g_string_free(app.log, TRUE);
+        g_free(directory); g_free(binary); return 1;
     }
     g_free(directory); g_free(binary);
     build_window(&app, fullscreen);
