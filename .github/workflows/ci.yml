@@ -17,7 +17,7 @@ jobs:
       - name: Install native build and desktop test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libgtk-3-dev libjson-glib-dev xvfb xauth
+          sudo apt-get install -y pkg-config libgtk-3-dev libjson-glib-dev librsvg2-common shared-mime-info adwaita-icon-theme xvfb xauth
       - name: Build
         run: make
       - name: Test
