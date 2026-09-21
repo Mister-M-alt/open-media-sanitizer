@@ -56,6 +56,16 @@ ssize_t __wrap_pread64(int fd, void *buffer, size_t count, off_t offset)
     return result;
 }
 
+/* Fortified toolchains may route pread through this checked glibc entry point. */
+ssize_t __wrap___pread64_chk(int fd, void *buffer, size_t count, off_t offset, size_t buffer_size)
+{
+    if (count > buffer_size) {
+        errno = EOVERFLOW;
+        return -1;
+    }
+    return __wrap_pread64(fd, buffer, count, offset);
+}
+
 int __wrap_fsync(int fd)
 {
     if (match("flush-error")) {

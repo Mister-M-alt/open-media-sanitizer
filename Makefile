@@ -19,7 +19,7 @@ all: $(PROGRAM)
 $(PROGRAM): $(OBJECTS)
 	$(CC) $(CFLAGS) $(WARNINGS) $(LDFLAGS) $(OBJECTS) $(LDLIBS) -o $@
 
-build/%.o: src/%.c include/oms.h | build
+build/%.o: src/%.c include/oms.h Makefile | build
 	$(CC) $(PROJECT_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 -c $< -o $@
 
 build:
@@ -35,12 +35,12 @@ run: all
 demo: all
 	python3 app/main.py --demo
 
-build/device-probe: tests/device_probe.c src/device.c include/oms.h | build
+build/device-probe: tests/device_probe.c src/device.c include/oms.h Makefile | build
 	$(CC) $(PROJECT_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $< $(LDFLAGS) -o $@
 
-build/oms-faults: $(OBJECTS) tests/io_faults.c
+build/oms-faults: $(OBJECTS) tests/io_faults.c Makefile
 	$(CC) $(PROJECT_CPPFLAGS) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) -std=c11 $(OBJECTS) tests/io_faults.c $(LDFLAGS) \
-		-Wl,--wrap=pwrite64,--wrap=pread64,--wrap=fsync,--wrap=close,--wrap=fstat64 -o $@
+		-Wl,--wrap=pwrite64,--wrap=pread64,--wrap=__pread64_chk,--wrap=fsync,--wrap=close,--wrap=fstat64 -o $@
 
 test: $(PROGRAM) build/device-probe build/oms-faults
 	sh tests/test_cli.sh ./$(PROGRAM)
