@@ -18,3 +18,9 @@ jobs:
         run: make
       - name: Test
         run: make test
+      - name: Install desktop test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk xvfb xauth
+      - name: Exercise the graphical demo
+        run: make test-gui

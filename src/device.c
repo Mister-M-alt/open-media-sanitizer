@@ -15,6 +15,13 @@
 #include <sys/sysmacros.h>
 #include <unistd.h>
 
+#ifndef OMS_PROC_ROOT
+#define OMS_PROC_ROOT "/proc"
+#endif
+#ifndef OMS_SYS_ROOT
+#define OMS_SYS_ROOT "/sys"
+#endif
+
 static void set_error(char *error, size_t error_size, const char *format, ...)
 {
     va_list arguments;
@@ -59,7 +66,7 @@ static int sysfs_for_device(unsigned int device_major,
 
     if (snprintf(link_path,
                  sizeof(link_path),
-                 "/sys/dev/block/%u:%u",
+                 OMS_SYS_ROOT "/dev/block/%u:%u",
                  device_major,
                  device_minor) >= (int)sizeof(link_path)) {
         return -1;
@@ -84,23 +91,38 @@ static bool device_depends_on_target(const char *device_sysfs,
     DIR *directory;
     struct dirent *entry;
 
-    if (same_or_descendant(device_sysfs, target_sysfs)) {
+    if (same_or_descendant(device_sysfs, target_sysfs) ||
+        same_or_descendant(target_sysfs, device_sysfs)) {
         return true;
     }
     if (depth >= 16U ||
         snprintf(slaves_path, sizeof(slaves_path), "%s/slaves", device_sysfs) >=
             (int)sizeof(slaves_path)) {
-        return false;
+        return true;
     }
     directory = opendir(slaves_path);
     if (directory == NULL) {
-        return false;
+        /* A partition has no slaves directory; its parent disk does. */
+        char partition_path[OMS_PATH_CAP];
+        struct stat partition;
+        if (errno == ENOENT &&
+            snprintf(partition_path, sizeof(partition_path), "%s/partition", device_sysfs) <
+                (int)sizeof(partition_path) && stat(partition_path, &partition) == 0) {
+            return false;
+        }
+        return true;
     }
-    while ((entry = readdir(directory)) != NULL) {
+    for (;;) {
         char entry_path[OMS_PATH_CAP];
         char *resolved;
         bool depends;
 
+        errno = 0;
+        entry = readdir(directory);
+        if (entry == NULL) {
+            bool failed = errno != 0;
+            return closedir(directory) != 0 || failed;
+        }
         if (entry->d_name[0] == '.') {
             continue;
         }
@@ -109,11 +131,13 @@ static bool device_depends_on_target(const char *device_sysfs,
                      "%s/%s",
                      slaves_path,
                      entry->d_name) >= (int)sizeof(entry_path)) {
-            continue;
+            (void)closedir(directory);
+            return true;
         }
         resolved = realpath(entry_path, NULL);
         if (resolved == NULL) {
-            continue;
+            (void)closedir(directory);
+            return true;
         }
         depends = device_depends_on_target(resolved, target_sysfs, depth + 1U);
         free(resolved);
@@ -122,16 +146,15 @@ static bool device_depends_on_target(const char *device_sysfs,
             return true;
         }
     }
-    (void)closedir(directory);
-    return false;
 }
 
 static bool target_is_mounted(const char *target_sysfs)
 {
-    FILE *mounts = fopen("/proc/self/mountinfo", "r");
+    FILE *mounts = fopen(OMS_PROC_ROOT "/self/mountinfo", "r");
     char *line = NULL;
     size_t capacity = 0U;
     bool mounted = false;
+    bool saw_line = false;
 
     if (mounts == NULL) {
         return true;
@@ -141,26 +164,59 @@ static bool target_is_mounted(const char *target_sysfs)
         unsigned int device_minor;
         char mounted_sysfs[OMS_PATH_CAP];
 
-        if (sscanf(line, "%*u %*u %u:%u", &device_major, &device_minor) != 2) {
-            continue;
+        saw_line = true;
+        if (sscanf(line, "%*u %*u %u:%u", &device_major, &device_minor) != 2 ||
+            strstr(line, " - ") == NULL) {
+            mounted = true;
+            break;
+        }
+        if (device_major == 0U) {
+            continue; /* Pseudo filesystems have no sysfs block entry. */
         }
         if (sysfs_for_device(device_major,
                              device_minor,
                              mounted_sysfs,
-                             sizeof(mounted_sysfs)) == 0 &&
+                             sizeof(mounted_sysfs)) != 0 ||
             device_depends_on_target(mounted_sysfs, target_sysfs, 0U)) {
             mounted = true;
             break;
         }
     }
+    mounted = mounted || ferror(mounts) != 0 || !feof(mounts) || !saw_line;
     free(line);
     (void)fclose(mounts);
     return mounted;
 }
 
-static bool target_is_swap(const char *target_sysfs)
+/* proc paths encode whitespace and backslashes as octal escapes. */
+static bool decode_path(char *path)
 {
-    FILE *swaps = fopen("/proc/swaps", "r");
+    char *input = path;
+    char *output = path;
+    while (*input != '\0') {
+        if (*input == '\\') {
+            unsigned int value;
+            if (strlen(input) < 4U || input[1] < '0' || input[1] > '7' ||
+                input[2] < '0' || input[2] > '7' || input[3] < '0' || input[3] > '7') {
+                return false;
+            }
+            value = (unsigned int)((input[1] - '0') * 64 + (input[2] - '0') * 8 + input[3] - '0');
+            if (value == 0U || value > 255U) {
+                return false;
+            }
+            *output++ = (char)value;
+            input += 4;
+        } else {
+            *output++ = *input++;
+        }
+    }
+    *output = '\0';
+    return true;
+}
+
+static bool target_is_swap(const struct oms_target *target)
+{
+    FILE *swaps = fopen(OMS_PROC_ROOT "/swaps", "r");
     char *line = NULL;
     size_t capacity = 0U;
     bool active = false;
@@ -173,24 +229,43 @@ static bool target_is_swap(const char *target_sysfs)
         char path[OMS_PATH_CAP];
         struct stat status;
         char swap_sysfs[OMS_PATH_CAP];
+        char swap_type[32];
+        unsigned long long swap_size;
+        unsigned long long swap_used;
+        int priority;
 
         if (first_line) {
             first_line = false;
+            if (strncmp(line, "Filename", 8U) != 0) {
+                active = true;
+                break;
+            }
             continue;
         }
-        if (sscanf(line, "%4095s", path) != 1 || stat(path, &status) != 0 ||
-            !S_ISBLK(status.st_mode)) {
+        if (sscanf(line, "%4095s %31s %llu %llu %d", path, swap_type, &swap_size,
+                   &swap_used, &priority) != 5 || !decode_path(path) || stat(path, &status) != 0) {
+            active = true;
+            break;
+        }
+        if (target->kind == OMS_TARGET_REGULAR) {
+            if (S_ISREG(status.st_mode) && status.st_dev == target->filesystem_id &&
+                status.st_ino == target->inode) {
+                active = true;
+                break;
+            }
             continue;
         }
-        if (sysfs_for_device(major(status.st_rdev),
-                             minor(status.st_rdev),
+        dev_t swap_device = S_ISBLK(status.st_mode) ? status.st_rdev : status.st_dev;
+        if (sysfs_for_device(major(swap_device),
+                             minor(swap_device),
                              swap_sysfs,
-                             sizeof(swap_sysfs)) == 0 &&
-            device_depends_on_target(swap_sysfs, target_sysfs, 0U)) {
+                             sizeof(swap_sysfs)) != 0 ||
+            device_depends_on_target(swap_sysfs, target->sysfs_path, 0U)) {
             active = true;
             break;
         }
     }
+    active = active || ferror(swaps) != 0 || !feof(swaps) || first_line;
     free(line);
     (void)fclose(swaps);
     return active;
@@ -204,52 +279,68 @@ static bool directory_has_entries(const char *path)
     if (directory == NULL) {
         return true;
     }
-    while ((entry = readdir(directory)) != NULL) {
+    for (;;) {
+        errno = 0;
+        entry = readdir(directory);
+        if (entry == NULL) {
+            bool failed = errno != 0;
+            return closedir(directory) != 0 || failed;
+        }
         if (entry->d_name[0] != '.') {
             (void)closedir(directory);
             return true;
         }
     }
-    (void)closedir(directory);
-    return false;
 }
 
 static bool target_has_holders(const char *target_sysfs)
 {
-    DIR *directory = opendir("/sys/class/block");
+    DIR *directory = opendir(OMS_SYS_ROOT "/class/block");
     struct dirent *entry;
+    bool found_target = false;
 
     if (directory == NULL) {
         return true;
     }
-    while ((entry = readdir(directory)) != NULL) {
+    for (;;) {
         char class_path[OMS_PATH_CAP];
         char holders_path[OMS_PATH_CAP];
         char *resolved;
 
+        errno = 0;
+        entry = readdir(directory);
+        if (entry == NULL) {
+            bool failed = errno != 0 || !found_target;
+            return closedir(directory) != 0 || failed;
+        }
         if (entry->d_name[0] == '.') {
             continue;
         }
         if (snprintf(class_path,
                      sizeof(class_path),
-                     "/sys/class/block/%s",
+                     OMS_SYS_ROOT "/class/block/%s",
                      entry->d_name) >= (int)sizeof(class_path)) {
-            continue;
+            (void)closedir(directory);
+            return true;
         }
         resolved = realpath(class_path, NULL);
         if (resolved == NULL) {
-            continue;
+            (void)closedir(directory);
+            return true;
         }
-        if (!same_or_descendant(resolved, target_sysfs)) {
+        if (!same_or_descendant(resolved, target_sysfs) &&
+            !same_or_descendant(target_sysfs, resolved)) {
             free(resolved);
             continue;
         }
+        found_target = true;
         if (snprintf(holders_path,
                      sizeof(holders_path),
                      "%s/holders",
                      resolved) >= (int)sizeof(holders_path)) {
             free(resolved);
-            continue;
+            (void)closedir(directory);
+            return true;
         }
         free(resolved);
         if (directory_has_entries(holders_path)) {
@@ -257,8 +348,6 @@ static bool target_has_holders(const char *target_sysfs)
             return true;
         }
     }
-    (void)closedir(directory);
-    return false;
 }
 
 static bool read_boolean_file(const char *path)
@@ -274,6 +363,57 @@ static bool read_boolean_file(const char *path)
     }
     (void)fclose(file);
     return value != 0;
+}
+
+static bool file_has_loop_holder(const struct oms_target *target)
+{
+    DIR *directory = opendir(OMS_SYS_ROOT "/class/block");
+    if (directory == NULL) {
+        return true;
+    }
+    for (;;) {
+        errno = 0;
+        struct dirent *entry = readdir(directory);
+        if (entry == NULL) {
+            bool failed = errno != 0;
+            return closedir(directory) != 0 || failed;
+        }
+        if (strncmp(entry->d_name, "loop", 4U) != 0) {
+            continue;
+        }
+        char backing_path[OMS_PATH_CAP];
+        if (snprintf(backing_path, sizeof(backing_path), OMS_SYS_ROOT "/class/block/%s/loop/backing_file",
+                     entry->d_name) >= (int)sizeof(backing_path)) {
+            (void)closedir(directory);
+            return true;
+        }
+        FILE *file = fopen(backing_path, "r");
+        if (file == NULL) {
+            if (errno == ENOENT) {
+                continue;
+            }
+            (void)closedir(directory);
+            return true;
+        }
+        char backing[OMS_PATH_CAP];
+        bool readable = fgets(backing, sizeof(backing), file) != NULL;
+        (void)fclose(file);
+        if (!readable || strchr(backing, '\n') == NULL) {
+            (void)closedir(directory);
+            return true;
+        }
+        backing[strcspn(backing, "\n")] = '\0';
+        if (!decode_path(backing)) {
+            (void)closedir(directory);
+            return true;
+        }
+        struct stat status;
+        if (stat(backing, &status) != 0 || strcmp(backing, target->path) == 0 ||
+            (status.st_dev == target->filesystem_id && status.st_ino == target->inode)) {
+            (void)closedir(directory);
+            return true;
+        }
+    }
 }
 
 static void read_model(const char *sysfs_path, char *model, size_t model_size)
@@ -301,14 +441,32 @@ static void read_model(const char *sysfs_path, char *model, size_t model_size)
     }
 }
 
+static int read_sysfs_number(const char *base, const char *name, uint64_t *number)
+{
+    char path[OMS_PATH_CAP];
+    unsigned long long value;
+    if (snprintf(path, sizeof(path), "%s/%s", base, name) >= (int)sizeof(path)) {
+        return -1;
+    }
+    FILE *file = fopen(path, "r");
+    if (file == NULL) {
+        return -1;
+    }
+    int result = fscanf(file, "%llu", &value) == 1 ? 0 : -1;
+    (void)fclose(file);
+    if (result == 0) {
+        *number = (uint64_t)value;
+    }
+    return result;
+}
+
 static int inspect_block(const struct stat *status,
                          struct oms_target *target,
                          char *error,
                          size_t error_size)
 {
-    int descriptor;
-    int read_only = 0;
-    unsigned long long size = 0ULL;
+    uint64_t read_only = 1U;
+    uint64_t sectors = 0U;
     char flag_path[OMS_PATH_CAP];
 
     if (sysfs_for_device(major(status->st_rdev),
@@ -318,27 +476,24 @@ static int inspect_block(const struct stat *status,
         set_error(error, error_size, "cannot resolve the device in sysfs");
         return -1;
     }
-    descriptor = open(target->path, O_RDONLY | O_CLOEXEC);
-    if (descriptor < 0) {
-        set_error(error, error_size, "cannot open %s: %s", target->path, strerror(errno));
+    /* Inventory must work without write permissions. The erase path validates
+       these values again using ioctls on its exclusively opened descriptor. */
+    if (read_sysfs_number(target->sysfs_path, "size", &sectors) != 0 ||
+        sectors > UINT64_MAX / 512U ||
+        read_sysfs_number(target->sysfs_path, "ro", &read_only) != 0) {
+        set_error(error, error_size, "cannot read device size or read-only state from sysfs");
         return -1;
     }
-    if (ioctl(descriptor, BLKGETSIZE64, &size) != 0) {
-        set_error(error, error_size, "cannot read device size: %s", strerror(errno));
-        (void)close(descriptor);
-        return -1;
-    }
-    if (ioctl(descriptor, BLKROGET, &read_only) != 0) {
-        read_only = 1;
-    }
-    (void)close(descriptor);
 
     target->kind = OMS_TARGET_BLOCK;
-    target->size_bytes = (uint64_t)size;
+    target->size_bytes = sectors * 512U;
     target->device_id = status->st_rdev;
+    if (read_sysfs_number(target->sysfs_path, "diskseq", &target->disk_sequence) != 0) {
+        (void)read_sysfs_number(target->sysfs_path, "../diskseq", &target->disk_sequence);
+    }
     target->read_only = read_only != 0;
     target->mounted = target_is_mounted(target->sysfs_path);
-    target->swap_active = target_is_swap(target->sysfs_path);
+    target->swap_active = target_is_swap(target);
     target->has_holders = target_has_holders(target->sysfs_path);
     if (snprintf(flag_path, sizeof(flag_path), "%s/removable", target->sysfs_path) <
         (int)sizeof(flag_path)) {
@@ -394,6 +549,7 @@ int oms_inspect_target(const char *path,
 
     target->filesystem_id = status.st_dev;
     target->inode = status.st_ino;
+    target->links = status.st_nlink;
     if (S_ISBLK(status.st_mode)) {
         return inspect_block(&status, target, error, error_size);
     }
@@ -415,6 +571,8 @@ int oms_inspect_target(const char *path,
     target->kind = OMS_TARGET_REGULAR;
     target->size_bytes = (uint64_t)status.st_size;
     target->read_only = access(target->path, W_OK) != 0;
+    target->swap_active = target_is_swap(target);
+    target->has_holders = file_has_loop_holder(target);
     return 0;
 }
 
@@ -470,9 +628,50 @@ static bool is_virtual_name(const char *name)
            strncmp(name, "zram", 4U) == 0;
 }
 
-int oms_list_targets(FILE *output)
+static void print_json_string(FILE *output, const char *value)
 {
-    DIR *directory = opendir("/sys/class/block");
+    const unsigned char *p = (const unsigned char *)value;
+    fputc('"', output);
+    for (; *p != 0U; ++p) {
+        if (*p == '"' || *p == '\\') {
+            fprintf(output, "\\%c", *p);
+        } else if (*p < 0x20U || *p == 0x7fU) {
+            fprintf(output, "\\u%04x", *p);
+        } else {
+            fputc(*p, output);
+        }
+    }
+    fputc('"', output);
+}
+
+void oms_target_identity(const struct oms_target *target, char *output, size_t size)
+{
+    (void)snprintf(output, size, "%llu:%llu:%llu:%llu:%llu", (unsigned long long)target->device_id,
+                   (unsigned long long)target->filesystem_id, (unsigned long long)target->inode,
+                   (unsigned long long)target->size_bytes, (unsigned long long)target->disk_sequence);
+}
+
+void oms_print_target_json(FILE *output, const struct oms_target *target)
+{
+    fputs("{\"path\":", output);
+    print_json_string(output, target->path);
+    fputs(",\"model\":", output);
+    print_json_string(output, target->model);
+    fprintf(output, ",\"kind\":\"%s\",\"size_bytes\":%llu,\"read_only\":%s,"
+                    "\"mounted\":%s,\"swap_active\":%s,\"has_holders\":%s,\"removable\":%s,"
+                    "\"identity\":\"%llu:%llu:%llu:%llu:%llu\"}",
+            target->kind == OMS_TARGET_BLOCK ? "block" : "file",
+            (unsigned long long)target->size_bytes,
+            target->read_only ? "true" : "false", target->mounted ? "true" : "false",
+            target->swap_active ? "true" : "false", target->has_holders ? "true" : "false",
+            target->removable ? "true" : "false", (unsigned long long)target->device_id,
+            (unsigned long long)target->filesystem_id, (unsigned long long)target->inode,
+            (unsigned long long)target->size_bytes, (unsigned long long)target->disk_sequence);
+}
+
+int oms_list_targets(FILE *output, bool json)
+{
+    DIR *directory = opendir(OMS_SYS_ROOT "/class/block");
     struct dirent *entry;
     unsigned int found = 0U;
 
@@ -480,7 +679,11 @@ int oms_list_targets(FILE *output)
         fprintf(stderr, "Cannot enumerate block devices: %s\n", strerror(errno));
         return -1;
     }
-    fprintf(output, "%-16s %-12s %-10s %-12s %s\n", "PATH", "SIZE", "REMOVABLE", "STATE", "MODEL");
+    if (json) {
+        fputc('[', output);
+    } else {
+        fprintf(output, "%-16s %-12s %-10s %-12s %s\n", "PATH", "SIZE", "REMOVABLE", "STATE", "MODEL");
+    }
     while ((entry = readdir(directory)) != NULL) {
         char partition_path[OMS_PATH_CAP];
         char device_path[OMS_PATH_CAP];
@@ -495,7 +698,7 @@ int oms_list_targets(FILE *output)
         }
         if (snprintf(partition_path,
                      sizeof(partition_path),
-                     "/sys/class/block/%s/partition",
+                     OMS_SYS_ROOT "/class/block/%s/partition",
                      entry->d_name) >= (int)sizeof(partition_path) ||
             stat(partition_path, &partition_status) == 0) {
             continue;
@@ -505,6 +708,15 @@ int oms_list_targets(FILE *output)
             continue;
         }
         if (oms_inspect_target(device_path, false, &target, error, sizeof(error)) != 0) {
+            fprintf(stderr, "Skipped %s: %s\n", device_path, error);
+            continue;
+        }
+        if (json) {
+            if (found > 0U) {
+                fputc(',', output);
+            }
+            oms_print_target_json(output, &target);
+            ++found;
             continue;
         }
         oms_format_size(target.size_bytes, size, sizeof(size));
@@ -525,7 +737,9 @@ int oms_list_targets(FILE *output)
         ++found;
     }
     (void)closedir(directory);
-    if (found == 0U) {
+    if (json) {
+        fputs("]\n", output);
+    } else if (found == 0U) {
         fprintf(output, "No supported block devices were visible.\n");
     }
     return 0;

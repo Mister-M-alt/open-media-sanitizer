@@ -1,8 +1,54 @@
 # Open Media Sanitizer
 
-Open Media Sanitizer (`oms`) is a small Linux command-line tool for overwriting an explicitly selected block device. It is designed around reviewable operations: inspection is separate from erasure, every erase starts as a dry run, and writes require both `--execute` and an exact target confirmation.
+Open Media Sanitizer is a Linux desktop workspace for selecting storage media, reviewing an erase operation, following its progress, and exporting a record. The desktop app uses native widgets with a slate-and-teal theme; no image or font assets are bundled. A small C command-line backend (`oms`) performs the writes and enforces target checks.
 
 The project is at an early stage. Use it only after reviewing the source and testing the workflow in an environment where data loss is acceptable.
+
+![Media Workspace showing disposable demo media](docs/workspace.png)
+
+## Open the app
+
+Install the system dependencies once:
+
+```sh
+# Debian / Ubuntu
+sudo apt install build-essential python3 python3-tk
+
+# Arch Linux
+sudo pacman -S --needed base-devel python tk
+
+# Fedora
+sudo dnf install gcc make python3 python3-tkinter
+```
+
+From this checkout, open a working demonstration:
+
+```sh
+./start.sh --demo
+```
+
+The launcher builds the backend and opens the desktop window. No pip, npm,
+account, network service, or application installation is needed. Demo mode
+creates two disposable files and runs the real write and read-back verification
+code only on those files. They are removed when the app closes.
+
+To inspect real devices, open `./start.sh`. Choose **Storage → select a medium →
+Review operation**, then type its complete path. Physical erasure requires root:
+after building as your regular user, launch `sudo -E ./start.sh` from a trusted
+graphical desktop session. The launcher never elevates itself or builds as root.
+If your desktop does not permit root windows, use the CLI below for execution.
+
+**Activity** shows write and verification progress and supports cancellation.
+**Reports** exports completed, failed, and cancelled operation records as JSON
+or a standalone HTML page that can also be printed to PDF. Records include the
+target, timing, settings, outcome, and verification result. Demo records are
+explicitly marked. Records are kept in memory until exported.
+
+Keyboard users can navigate with Tab and activate controls with Space/Enter.
+If no graphical display is available, the launcher prints an explanation and
+the CLI remains available. The current interface is in English.
+
+See the [review notes](docs/review.md) for corrected issues, test coverage, and limits.
 
 ## Safety model
 
@@ -11,6 +57,10 @@ The project is at an early stage. Use it only after reviewing the source and tes
 - Execution requires the canonical target path to be typed interactively or supplied with `--confirm`.
 - Mounted devices, active swap devices, read-only devices, and devices with active holders are rejected.
 - The target is inspected again after confirmation and checked again after opening.
+- The desktop binds confirmation to the inspected device identity and size.
+- Missing or malformed usage information blocks execution.
+- Block-device writes require an exclusive open; regular-file tests use an advisory lock.
+- Test files with multiple hard links, active swap, or loop-device attachments are rejected.
 - Regular files are rejected unless `--allow-file` is supplied for controlled testing.
 - Block-device execution requires root privileges.
 
@@ -18,14 +68,20 @@ These checks reduce operator error, but they cannot make a destructive command r
 
 ## Build and test
 
-The build requires a C11 compiler, GNU Make, and Linux kernel headers.
+The backend requires a C11 compiler, GNU Make, and Linux kernel headers. Tests
+also use Python 3; the desktop app additionally requires system Tk.
 
 ```sh
 make
 make test
 ```
 
-Install the executable as `/usr/local/bin/oms`:
+For graphical tests, install `python3-tk`, `xvfb`, and `xauth`, then run `make test-gui`.
+The suite uses disposable files and simulated sysfs/proc data. It never writes
+to a physical block device.
+
+Install the CLI executable as `/usr/local/bin/oms` (the desktop can run directly
+from the checkout):
 
 ```sh
 sudo make install
@@ -90,6 +146,13 @@ One pass is the default. Up to 16 passes can be requested, although additional h
 
 Read-back verification checks that the requested byte pattern can be read from the exposed logical range after the final pass. It is an integrity check for that operation, not a certification of sanitization or regulatory compliance.
 
+Usage checks inspect the current Linux mount namespace. Run physical erasure on
+the host, not inside a container with a partial device view. File locks are
+advisory; `--allow-file` is for controlled tests, not concurrent file shredding.
+Verification requests cache eviction but cannot guarantee that every read comes
+from physical media. Cancelling an operation leaves a partially overwritten
+target. Physical hardware behavior has not been certified by the test suite.
+
 The current implementation supports Linux. Device inventory intentionally omits loop, RAM, and zram devices, while an explicitly named regular file can be used with `--allow-file`.
 
 ## Contributing
@@ -104,3 +167,6 @@ Licensed under either of the following, at your option:
 - MIT License ([LICENSE-MIT](LICENSE-MIT))
 
 Unless you explicitly state otherwise, contributions intentionally submitted for inclusion in this project are licensed under the same terms.
+
+System components such as Python and Tk retain their own licenses and are not
+bundled with this repository.

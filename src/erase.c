@@ -5,18 +5,24 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <linux/fs.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/file.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
 
 #define OMS_BUFFER_SIZE (1024U * 1024U)
 
 static volatile sig_atomic_t interrupted = 0;
+static bool machine_progress = false;
+static unsigned int current_pass = 0U;
+static unsigned int total_passes = 0U;
 
 static void set_error(char *error, size_t error_size, const char *format, ...)
 {
@@ -101,13 +107,18 @@ static int fill_random(int random_descriptor,
     size_t position = 0U;
 
     while (position < length) {
+        if (interrupted != 0) {
+            set_error(error, error_size, "operation interrupted; erase is incomplete");
+            return -1;
+        }
         ssize_t count = read(random_descriptor, buffer + position, length - position);
 
         if (count < 0 && errno == EINTR) {
             continue;
         }
         if (count <= 0) {
-            set_error(error, error_size, "cannot read random data: %s", strerror(errno));
+            set_error(error, error_size, "cannot read random data: %s",
+                      count == 0 ? "unexpected end of random source" : strerror(errno));
             return -1;
         }
         position += (size_t)count;
@@ -125,6 +136,10 @@ static int write_all_at(int descriptor,
     size_t position = 0U;
 
     while (position < length) {
+        if (interrupted != 0) {
+            set_error(error, error_size, "operation interrupted; erase is incomplete");
+            return -1;
+        }
         ssize_t count = pwrite(descriptor,
                                buffer + position,
                                length - position,
@@ -139,7 +154,8 @@ static int write_all_at(int descriptor,
         }
         if (count <= 0) {
             set_error(error, error_size, "write failed at byte %llu: %s",
-                      (unsigned long long)(offset + position), strerror(errno));
+                      (unsigned long long)(offset + position),
+                      count == 0 ? "no write progress" : strerror(errno));
             return -1;
         }
         position += (size_t)count;
@@ -157,6 +173,10 @@ static int read_all_at(int descriptor,
     size_t position = 0U;
 
     while (position < length) {
+        if (interrupted != 0) {
+            set_error(error, error_size, "operation interrupted; erase is incomplete");
+            return -1;
+        }
         ssize_t count = pread(descriptor,
                               buffer + position,
                               length - position,
@@ -171,7 +191,8 @@ static int read_all_at(int descriptor,
         }
         if (count <= 0) {
             set_error(error, error_size, "read failed at byte %llu: %s",
-                      (unsigned long long)(offset + position), strerror(errno));
+                      (unsigned long long)(offset + position),
+                      count == 0 ? "unexpected end of target" : strerror(errno));
             return -1;
         }
         position += (size_t)count;
@@ -179,12 +200,20 @@ static int read_all_at(int descriptor,
     return 0;
 }
 
+static unsigned int progress_percentage(uint64_t complete, uint64_t total)
+{
+    return total == 0U ? 100U :
+        (unsigned int)(((long double)complete / (long double)total) * 100.0L);
+}
+
 static void show_progress(const char *phase, uint64_t complete, uint64_t total)
 {
-    unsigned int percentage =
-        total == 0U ? 100U : (unsigned int)(((long double)complete / (long double)total) * 100.0L);
+    unsigned int percentage = progress_percentage(complete, total);
 
-    if (isatty(STDERR_FILENO)) {
+    if (machine_progress) {
+        fprintf(stderr, "OMS_PROGRESS %s %u %u %llu %llu\n", phase, current_pass,
+                total_passes, (unsigned long long)complete, (unsigned long long)total);
+    } else if (isatty(STDERR_FILENO)) {
         fprintf(stderr, "\r%-10s %3u%%", phase, percentage);
         (void)fflush(stderr);
         if (complete == total) {
@@ -224,7 +253,7 @@ static int write_pass(int descriptor,
             return -1;
         }
         offset += length;
-        percentage = size == 0U ? 100U : (unsigned int)((offset * 100U) / size);
+        percentage = progress_percentage(offset, size);
         if (percentage != last_percentage) {
             show_progress("writing", offset, size);
             last_percentage = percentage;
@@ -273,7 +302,7 @@ static int verify_pattern(int descriptor,
             }
         }
         offset += length;
-        percentage = size == 0U ? 100U : (unsigned int)((offset * 100U) / size);
+        percentage = progress_percentage(offset, size);
         if (percentage != last_percentage) {
             show_progress("verifying", offset, size);
             last_percentage = percentage;
@@ -288,7 +317,8 @@ static bool same_open_target(const struct oms_target *target, const struct stat 
         return S_ISBLK(status->st_mode) && status->st_rdev == target->device_id;
     }
     return S_ISREG(status->st_mode) && status->st_dev == target->filesystem_id &&
-           status->st_ino == target->inode;
+           status->st_ino == target->inode && status->st_nlink == 1U &&
+           status->st_size >= 0 && (uint64_t)status->st_size == target->size_bytes;
 }
 
 int oms_erase_target(const char *path,
@@ -300,10 +330,14 @@ int oms_erase_target(const char *path,
     struct oms_target current;
     struct stat open_status;
     struct sigaction action;
+    struct sigaction old_interrupt;
+    struct sigaction old_terminate;
+    bool handlers_installed = false;
+    bool writes_attempted = false;
     unsigned char *buffer = NULL;
     int descriptor = -1;
     int random_descriptor = -1;
-    int open_flags = O_RDWR | O_CLOEXEC;
+    int open_flags = O_RDWR | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK;
     unsigned int pass;
     int result = -1;
 
@@ -319,6 +353,18 @@ int oms_erase_target(const char *path,
                            &target,
                            error,
                            error_size) != 0) {
+        return -1;
+    }
+    if (options->expected_identity != NULL) {
+        char identity[160];
+        oms_target_identity(&target, identity, sizeof(identity));
+        if (strcmp(identity, options->expected_identity) != 0) {
+            set_error(error, error_size, "the target identity changed; inspect and confirm it again");
+            return -1;
+        }
+    }
+    if (target.kind == OMS_TARGET_REGULAR && target.links != 1U) {
+        set_error(error, error_size, "test files must have exactly one hard link");
         return -1;
     }
     oms_print_target(stdout, &target);
@@ -340,16 +386,16 @@ int oms_erase_target(const char *path,
         return -1;
     }
     if (target.mounted || target.swap_active || target.has_holders) {
-        set_error(error, error_size, "the target is active or has active dependants");
-        return -1;
-    }
-    if (target.kind == OMS_TARGET_BLOCK && geteuid() != 0) {
-        set_error(error, error_size, "block-device erasure requires root privileges");
+        set_error(error, error_size, "the target is active or its usage could not be determined");
         return -1;
     }
     if (!options->execute) {
         printf("\nDry run only. Add --execute to permit writes.\n");
         return 0;
+    }
+    if (target.kind == OMS_TARGET_BLOCK && geteuid() != 0) {
+        set_error(error, error_size, "block-device erasure requires root privileges");
+        return -1;
     }
     if (confirm_target(&target,
                        options->confirmation,
@@ -367,7 +413,8 @@ int oms_erase_target(const char *path,
     }
     if (strcmp(current.path, target.path) != 0 || current.kind != target.kind ||
         current.size_bytes != target.size_bytes || current.device_id != target.device_id ||
-        current.filesystem_id != target.filesystem_id || current.inode != target.inode) {
+        current.filesystem_id != target.filesystem_id || current.inode != target.inode ||
+        current.disk_sequence != target.disk_sequence) {
         set_error(error, error_size, "the target changed after confirmation");
         return -1;
     }
@@ -390,6 +437,29 @@ int oms_erase_target(const char *path,
         set_error(error, error_size, "the opened target does not match the inspected target");
         goto cleanup;
     }
+    if (target.kind == OMS_TARGET_BLOCK) {
+        unsigned long long opened_size = 0ULL;
+        int read_only = 1;
+        if (ioctl(descriptor, BLKGETSIZE64, &opened_size) != 0 ||
+            ioctl(descriptor, BLKROGET, &read_only) != 0 || read_only != 0 ||
+            opened_size != target.size_bytes) {
+            set_error(error, error_size, "the opened device size or write permissions changed");
+            goto cleanup;
+        }
+#ifdef BLKGETDISKSEQ
+        if (target.disk_sequence != 0U) {
+            unsigned long long disk_sequence = 0ULL;
+            if (ioctl(descriptor, BLKGETDISKSEQ, &disk_sequence) != 0 ||
+                disk_sequence != target.disk_sequence) {
+                set_error(error, error_size, "the device was replaced; inspect and confirm it again");
+                goto cleanup;
+            }
+        }
+#endif
+    } else if (flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
+        set_error(error, error_size, "the test file is locked by another operation");
+        goto cleanup;
+    }
     buffer = malloc(OMS_BUFFER_SIZE);
     if (buffer == NULL) {
         set_error(error, error_size, "cannot allocate the write buffer");
@@ -406,11 +476,23 @@ int oms_erase_target(const char *path,
     memset(&action, 0, sizeof(action));
     action.sa_handler = handle_signal;
     (void)sigemptyset(&action.sa_mask);
-    (void)sigaction(SIGINT, &action, NULL);
-    (void)sigaction(SIGTERM, &action, NULL);
     interrupted = 0;
+    if (sigaction(SIGINT, &action, &old_interrupt) != 0) {
+        set_error(error, error_size, "cannot install the interrupt handler");
+        goto cleanup;
+    }
+    if (sigaction(SIGTERM, &action, &old_terminate) != 0) {
+        (void)sigaction(SIGINT, &old_interrupt, NULL);
+        set_error(error, error_size, "cannot install the termination handler");
+        goto cleanup;
+    }
+    handlers_installed = true;
+    machine_progress = options->progress;
+    total_passes = options->passes;
 
     for (pass = 1U; pass <= options->passes; ++pass) {
+        current_pass = pass;
+        writes_attempted = true;
         printf("Pass %u of %u: writing %s pattern\n",
                pass,
                options->passes,
@@ -438,7 +520,11 @@ int oms_erase_target(const char *path,
             goto cleanup;
         }
     }
-    printf("Erase completed for %s.\n", target.path);
+    if (interrupted != 0 || fstat(descriptor, &open_status) != 0 ||
+        !same_open_target(&target, &open_status)) {
+        set_error(error, error_size, "operation interrupted or target changed; erase is incomplete");
+        goto cleanup;
+    }
     result = 0;
 
 cleanup:
@@ -447,7 +533,24 @@ cleanup:
         (void)close(random_descriptor);
     }
     if (descriptor >= 0) {
-        (void)close(descriptor);
+        if (result != 0 && writes_attempted) {
+            (void)fsync(descriptor);
+        }
+        if (close(descriptor) != 0 && result == 0) {
+            set_error(error, error_size, "cannot close target: %s", strerror(errno));
+            result = -1;
+        }
+    }
+    if (handlers_installed) {
+        if (interrupted != 0 && result == 0) {
+            set_error(error, error_size, "operation interrupted; erase is incomplete");
+            result = -1;
+        }
+        (void)sigaction(SIGINT, &old_interrupt, NULL);
+        (void)sigaction(SIGTERM, &old_terminate, NULL);
+    }
+    if (result == 0) {
+        printf("Erase completed for %s.\n", target.path);
     }
     return result;
 }

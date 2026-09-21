@@ -14,8 +14,8 @@ static void print_usage(FILE *output)
             "Open Media Sanitizer %s\n"
             "\n"
             "Usage:\n"
-            "  oms list\n"
-            "  oms inspect TARGET [--allow-file]\n"
+            "  oms list [--json]\n"
+            "  oms inspect TARGET [--allow-file] [--json]\n"
             "  oms erase TARGET [OPTIONS]\n"
             "\n"
             "Erase options:\n"
@@ -25,6 +25,8 @@ static void print_usage(FILE *output)
             "  --execute                   Perform the erase; otherwise show a plan\n"
             "  --confirm PATH              Exact canonical path for non-interactive use\n"
             "  --allow-file                Permit a regular file as the target\n"
+            "  --progress                  Emit progress events for the desktop app\n"
+            "  --expect-id ID              Require the identity returned by inspect --json\n"
             "  -h, --help                  Show this help\n"
             "  -V, --version               Show the version\n",
             OMS_VERSION);
@@ -52,6 +54,12 @@ static int parse_passes(const char *value, unsigned int *passes)
     char *end = NULL;
     unsigned long parsed;
 
+    for (const char *p = value; *p != '\0'; ++p) {
+        if (*p < '0' || *p > '9') {
+            return -1;
+        }
+    }
+
     errno = 0;
     parsed = strtoul(value, &end, 10);
     if (errno != 0 || end == value || *end != '\0' || parsed < 1UL || parsed > 16UL ||
@@ -68,11 +76,17 @@ static int command_inspect(int argc, char **argv)
     char error[512];
     const char *path = NULL;
     bool allow_regular = false;
+    bool json = false;
     int i;
 
     for (i = 2; i < argc; ++i) {
         if (strcmp(argv[i], "--allow-file") == 0) {
             allow_regular = true;
+        } else if (strcmp(argv[i], "--json") == 0) {
+            json = true;
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            print_usage(stdout);
+            return 0;
         } else if (argv[i][0] == '-') {
             fprintf(stderr, "Unknown option: %s\n", argv[i]);
             return 2;
@@ -93,7 +107,12 @@ static int command_inspect(int argc, char **argv)
         return 1;
     }
 
-    oms_print_target(stdout, &target);
+    if (json) {
+        oms_print_target_json(stdout, &target);
+        fputc('\n', stdout);
+    } else {
+        oms_print_target(stdout, &target);
+    }
     return 0;
 }
 
@@ -106,6 +125,8 @@ static int command_erase(int argc, char **argv)
         .execute = false,
         .allow_regular = false,
         .confirmation = NULL,
+        .progress = false,
+        .expected_identity = NULL,
     };
     char error[512];
     const char *path = NULL;
@@ -128,6 +149,14 @@ static int command_erase(int argc, char **argv)
             options.execute = true;
         } else if (strcmp(argv[i], "--allow-file") == 0) {
             options.allow_regular = true;
+        } else if (strcmp(argv[i], "--progress") == 0) {
+            options.progress = true;
+        } else if (strcmp(argv[i], "--expect-id") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "--expect-id requires an identity.\n");
+                return 2;
+            }
+            options.expected_identity = argv[i];
         } else if (strcmp(argv[i], "--confirm") == 0) {
             if (++i >= argc) {
                 fprintf(stderr, "--confirm requires a path.\n");
@@ -165,6 +194,7 @@ static int command_erase(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
+    (void)setvbuf(stdout, NULL, _IOLBF, 0);
     if (argc < 2) {
         print_usage(stderr);
         return 2;
@@ -179,11 +209,12 @@ int main(int argc, char **argv)
         return 0;
     }
     if (strcmp(argv[1], "list") == 0) {
-        if (argc != 2) {
-            fprintf(stderr, "list does not accept arguments.\n");
+        bool json = argc == 3 && strcmp(argv[2], "--json") == 0;
+        if (argc != 2 && !json) {
+            fprintf(stderr, "Usage: oms list [--json]\n");
             return 2;
         }
-        return oms_list_targets(stdout) == 0 ? 0 : 1;
+        return oms_list_targets(stdout, json) == 0 ? 0 : 1;
     }
     if (strcmp(argv[1], "inspect") == 0) {
         return command_inspect(argc, argv);
