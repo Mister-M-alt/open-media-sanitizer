@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+name: Bootable images
+on:
+  workflow_dispatch:
+    inputs:
+      architecture:
+        description: Image architecture
+        type: choice
+        default: all
+        options: [all, x86_32, x86_64, arm32, arm64]
+permissions:
+  contents: read
+jobs:
+  configure:
+    runs-on: ubuntu-24.04
+    outputs:
+      architectures: ${{ steps.matrix.outputs.architectures }}
+    steps:
+      - id: matrix
+        env:
+          ARCHITECTURE: ${{ inputs.architecture }}
+        run: |
+          case "$ARCHITECTURE" in
+            all) echo 'architectures=["x86_32","x86_64","arm32","arm64"]' >> "$GITHUB_OUTPUT" ;;
+            x86_32|x86_64|arm32|arm64) printf 'architectures=["%s"]\n' "$ARCHITECTURE" >> "$GITHUB_OUTPUT" ;;
+            *) exit 2 ;;
+          esac
+  build:
+    needs: configure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: ${{ fromJson(needs.configure.outputs.architectures) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Free space on disposable build worker
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison cpio curl file flex gawk git libncurses-dev patch perl python3 rsync unzip wget xz-utils qemu-system-x86 qemu-system-arm ovmf qemu-efi-aarch64 qemu-efi-arm socat jq
+      - name: Build native application and boot media
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+          JOBS: 4
+        run: ./images/build.sh "$ARCHITECTURE"
+      - name: Check graphical boot in an isolated virtual machine
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: ./images/smoke-vm.sh "$ARCHITECTURE"
+      - name: Package dependency licenses and corresponding sources
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+        run: ./images/package-sources.sh "$ARCHITECTURE"
+      - name: Upload image, checksums, configuration and source bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: oms-${{ matrix.architecture }}
+          path: image-output/artifacts/${{ matrix.architecture }}/
+          compression-level: 0
+          retention-days: 14
+      - name: Upload virtual machine diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: boot-check-${{ matrix.architecture }}
+          path: |
+            image-output/vm-*/serial.log
+            image-output/vm-*/screen.ppm
+            image-output/vm-*/boot-device.json
+          if-no-files-found: ignore
+          retention-days: 14

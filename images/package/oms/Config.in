@@ -1,0 +1,4 @@
+config BR2_PACKAGE_OMS
+	bool "Open Media Sanitizer"
+	depends on BR2_PACKAGE_LIBGTK3
+	select BR2_PACKAGE_JSON_GLIB

@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+export HOME=/tmp/home
+export XDG_RUNTIME_DIR=/run/oms
+export GDK_BACKEND=x11
+export NO_AT_BRIDGE=1
+export LIBGL_ALWAYS_SOFTWARE=1
+xset s off
+xset -dpms
+openbox --sm-disable &
+set -- --fullscreen
+if grep -qw 'oms.demo=1' /proc/cmdline; then set -- "$@" --demo; fi
+while :; do
+    /usr/bin/oms-gui "$@"
+    sleep 1
+done

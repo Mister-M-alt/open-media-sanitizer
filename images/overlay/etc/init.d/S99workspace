@@ -1,0 +1,14 @@
+#!/bin/sh
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+case "$1" in
+    start)
+        mkdir -p /run/oms /tmp/home
+        chmod 0700 /run/oms /tmp/home
+        if grep -qw 'oms.console=1' /proc/cmdline; then
+            echo 'Recovery shell: press Ctrl+Alt+F2.'
+        else
+            HOME=/tmp/home XDG_RUNTIME_DIR=/run/oms xinit /usr/bin/oms-session -- /usr/bin/X :0 vt1 -nolisten tcp > /tmp/oms-display.log 2>&1 &
+        fi
+        ;;
+    stop) killall oms-gui 2>/dev/null || true ;;
+esac

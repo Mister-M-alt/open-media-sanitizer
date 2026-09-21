@@ -1,0 +1,5 @@
+# SHA-256, filename, source URL. Versions match Bootlin stable 2024.05-1.
+49595b9215b6135c97fd9eaf3f7de389afae615fdbc0fdf2f7dd066940c41ee9 bootlin-buildroot-1bef6133191aec7b923f5ff80af077c5cdab4e20.tar.gz https://codeload.github.com/bootlin/buildroot-toolchains/tar.gz/1bef6133191aec7b923f5ff80af077c5cdab4e20
+0845e9621c9543a13f484e94584a49ffc0129970e9914624235fc1d061a0c083 gcc-13.3.0.tar.xz https://toolchains.bootlin.com/downloads/releases/sources/gcc-final-13.3.0/gcc-13.3.0.tar.xz
+2858e8e47c4c0df32b526c56d5590ec939e8178201ee9526bb070999ce4aa1f2 glibc-2.39-74-g198632a05f6c7b9ab67d3331d8caace9ceabb685.tar.gz https://toolchains.bootlin.com/downloads/releases/sources/glibc-2.39-74-g198632a05f6c7b9ab67d3331d8caace9ceabb685/glibc-2.39-74-g198632a05f6c7b9ab67d3331d8caace9ceabb685.tar.gz
+6c5e4d3c87feadbfdb9f7d2e46f3f120b00286ba380491c5956708e0b94232c8 linux-4.19.315.tar.xz https://toolchains.bootlin.com/downloads/releases/sources/linux-headers-4.19.315/linux-4.19.315.tar.xz

@@ -1,0 +1,1 @@
+source "$BR2_EXTERNAL_OMS_PATH/package/oms/Config.in"

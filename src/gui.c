@@ -66,7 +66,9 @@ static GtkWidget *table(GtkWidget *box, GtkListStore *model, const char *const *
         GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
         g_object_set(renderer, "ellipsize", PANGO_ELLIPSIZE_MIDDLE, NULL);
         GtkTreeViewColumn *column = gtk_tree_view_column_new_with_attributes(titles[i], renderer, "text", i, NULL);
-        gtk_tree_view_column_set_min_width(column, i == 0 ? 180 : 80);
+        const int inventory_widths[] = {200, 150, 100, 270};
+        const int report_widths[] = {180, 220, 100};
+        gtk_tree_view_column_set_min_width(column, columns == 4 ? inventory_widths[i] : report_widths[i]);
         gtk_tree_view_column_set_expand(column, i == 0);
         gtk_tree_view_column_set_resizable(column, TRUE);
         gtk_tree_view_append_column(GTK_TREE_VIEW(view), column);

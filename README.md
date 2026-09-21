@@ -12,7 +12,7 @@ Install the system dependencies once:
 
 ```sh
 # Debian / Ubuntu
-sudo apt install build-essential pkg-config libgtk-3-dev libjson-glib-dev
+sudo apt install build-essential pkg-config libgtk-3-dev libjson-glib-dev librsvg2-common shared-mime-info adwaita-icon-theme
 
 # Arch Linux
 sudo pacman -S --needed base-devel pkgconf gtk3 json-glib
@@ -49,6 +49,11 @@ If no graphical display is available, the launcher prints an explanation and
 the CLI remains available. The current interface is in English.
 
 See the [review notes](docs/review.md) for corrected issues, test coverage, and limits.
+
+## Boot without an installed OS
+
+See [standalone boot media](docs/boot-images.md) for the x86 32-bit, x86 64-bit,
+ARM 32-bit, and ARM 64-bit image builds and their firmware requirements.
 
 ## Safety model
 
@@ -168,5 +173,6 @@ Licensed under either of the following, at your option:
 
 Unless you explicitly state otherwise, contributions intentionally submitted for inclusion in this project are licensed under the same terms.
 
-System components such as GTK and Linux retain their own licenses and are not
-bundled with this repository.
+System components such as GTK and Linux retain their own licenses. Distributed
+boot images include those components; keep their matching source bundles and
+notices alongside the images, as described in [the image guide](docs/boot-images.md).
