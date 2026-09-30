@@ -13,8 +13,8 @@ C code. Begin with the demonstration before working with physical storage.
 | You need to work without an installed OS | Download and prepare the [standalone boot image](../README.md#download-and-boot) |
 | You have only a terminal | Use the [CLI reference](cli-reference.md), starting with its temporary-file example |
 
-Downloading private releases requires repository access and an internet
-connection. Running the prepared boot image requires neither an account nor a
+Downloading releases requires an internet connection. Running the prepared
+boot image requires neither an account nor a
 network connection. Use a graphical display and keyboard; a mouse is optional.
 
 For the desktop source route, a checkout means the downloaded project folder
@@ -64,6 +64,10 @@ Only proceed on storage you are authorized to overwrite. Make any needed backup
 before selecting a target. Identify the intended device by its physical role,
 model, and capacity as well as its current Linux path. Paths can change when
 devices are disconnected or the machine restarts.
+
+Check the [media suitability table](scope.md#media-suitability) first. A device
+being writable does not establish that logical overwriting meets your erasure
+requirements, particularly for flash storage or inaccessible regions.
 
 The live workspace header says **LIVE · local devices**. Real writes require
 root access. The bootable edition already runs locally with this access. On an
@@ -125,7 +129,7 @@ The app does not automatically save or reload report history.
 
 On boot media, writable session data is in RAM and disappears on shutdown.
 Arrange separate report storage, then follow the
-[recovery-console mounting instructions](boot-images.md#use). Return to the
+[report-storage walkthrough](boot-images.md#save-reports-to-a-second-drive). Return to the
 desktop with Ctrl+Alt+F1 and export there. Exported HTML can be opened and printed
 from another computer with a browser; the boot image does not include a browser.
 

@@ -1,6 +1,6 @@
 # Open Media Sanitizer
 
-Open Media Sanitizer is a native C11 application for inspecting storage, reviewing
+Open Media Sanitizer is a free, open-source C11 application for inspecting storage, reviewing
 an erase operation, following its progress, and exporting a record. Run it on a
 Linux desktop or boot a complete standalone system from USB without an installed
 operating system or a network service.
@@ -16,6 +16,7 @@ The project is at an early stage. Use it only after reviewing the source and tes
 | What you want to do | Where to start |
 | --- | --- |
 | Understand the project and its terminology | [Documentation index and glossary](docs/README.md) |
+| Decide whether the tool fits your media and workflow | [Scope and media support](docs/scope.md) |
 | Try the interface for the first time | [Demo walkthrough](docs/operator-guide.md#try-the-demo-first) |
 | Boot a computer from USB | [Download and boot](#download-and-boot), then [the operator guide](docs/operator-guide.md) |
 | Perform and record an operation | [Operator guide](docs/operator-guide.md) and [reports](docs/reports.md) |
@@ -23,6 +24,7 @@ The project is at an early stage. Use it only after reviewing the source and tes
 | Diagnose a problem | [Troubleshooting](docs/troubleshooting.md) |
 | Build, test, or contribute C code | [Developer guide](docs/development.md) and [contributing](CONTRIBUTING.md) |
 | Build images, validate hardware, or distribute a release | [Boot images](docs/boot-images.md) and [maintainer guide](docs/maintenance.md) |
+| Review release changes and validation evidence | [Changelog](CHANGELOG.md) and [validation record](docs/validation.md) |
 
 ![Media Workspace showing disposable demo media](docs/workspace.png)
 
@@ -30,7 +32,8 @@ The project is at an early stage. Use it only after reviewing the source and tes
 
 Download the images, `SHA256SUMS`, and matching source bundles from the
 [0.3.0 preview release](https://github.com/Mister-M-alt/open-media-sanitizer/releases/tag/v0.3.0-preview.1).
-The repository and release are currently **private**; GitHub access is required.
+Source and release downloads are public. No account, activation, subscription,
+or per-erasure payment is required to use the application.
 
 Choose the image for your CPU and firmware:
 
@@ -48,15 +51,17 @@ drivers; these generic UEFI images do not support every ARM board. Secure Boot
 signing is not included.
 
 1. Download the chosen `.img.xz` and `SHA256SUMS` into the same directory.
-2. Verify the downloaded files, then decompress the image. For example, on Linux:
+2. Verify the downloaded files. If your image writer needs an uncompressed image,
+   decompress it first. For example, on Linux:
 
    ```sh
    sha256sum --ignore-missing -c SHA256SUMS
    xz -dk oms-x86_64.img.xz
    ```
 
-3. Use an image-writing utility to write the `.img` to a disposable USB drive,
-   replacing that drive's contents. Select the USB drive in the firmware boot menu.
+3. Follow the [USB preparation walkthrough](docs/boot-images.md#prepare-a-usb-drive)
+   for Linux, Windows, or macOS. Writing the image replaces the USB drive's
+   contents. Select that drive in the firmware boot menu.
 
 Starting the workspace does not erase a device. A separate demonstration boot
 entry uses disposable files. Session state and reports live in RAM; export
@@ -232,6 +237,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Security-sensitive reports should follow
 Documentation improvements are welcome. Start with the
 [developer guide](docs/development.md) for the source layout and validation
 workflow; no code changes are needed to contribute a clearer explanation.
+
+## Alternatives
+
+Other tools may fit a different erasure method, hardware platform, or reporting
+workflow. The links below lead to their own documentation and current terms.
+
+| Tool | Availability | Focus |
+| --- | --- | --- |
+| [ShredOS with nwipe](https://github.com/PartialVolume/shredos.x86_64) | Free and open source | Bootable disk erasure, multiple selected disks, and PDF reports; [nwipe](https://github.com/martijnvanbrummelen/nwipe) also runs on Linux |
+| [RedKey USB](https://redkeyusb.com/products/redkey-usb-professional) | **Paid** | Commercial bootable erasure; Professional and Ultimate editions include PDF reports and supported hardware erasure controls |
+| [Parted Magic](https://partedmagic.com/secure-erase/) | **Paid** | Bootable storage toolkit with overwrite and supported firmware erase methods, alongside partitioning and recovery tools |
+| [Blancco Drive Eraser](https://blancco.com/products/drive-eraser/) | **Paid** | Commercial erasure for enterprise and refurbishment workflows, with reporting and management integration |
+
+This list was checked against the projects' published information on
+30 September 2026. Features depend on the edition, release, device, and connection;
+the tools are not interchangeable for every use case. These are separate projects;
+listing them does not imply affiliation or endorsement.
 
 ## License
 

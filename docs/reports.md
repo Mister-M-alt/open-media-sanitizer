@@ -18,9 +18,12 @@ create an operation record.
 5. Confirm that the exported file is accessible before closing the session.
 
 Exports reject a device, a symbolic-link destination, and the erase target.
-Files are written through a temporary file and renamed into place, with `0600`
-permissions: only the owner has read/write access. In the boot edition they are
-normally owned by root, so arrange access when handing them to another person.
+Files are written through a temporary file and renamed into place, requesting
+`0600` permissions: owner read/write on filesystems that support Unix permissions.
+In the boot edition they are normally owned by root, so arrange access when
+handing them to another person. FAT32 uses mount-level access settings rather
+than storing these permissions; they do not protect a file after the drive is
+connected to another system.
 
 HTML contains escaped text and no scripts. Open it in a browser on a computer
 with a browser installed, then use that browser's print or print-to-PDF feature.
@@ -29,7 +32,7 @@ include a browser or print service.
 
 Report history is kept in memory. There is no database, automatic export,
 cloud upload, or report-import feature. On boot media, export to
-[separate mounted storage](boot-images.md#use) before shutdown; a file saved
+[separate mounted storage](boot-images.md#save-reports-to-a-second-drive) before shutdown; a file saved
 under `/tmp` disappears with the session. Mounting the report drive also blocks
 it from erasure.
 
@@ -55,6 +58,8 @@ evidence that a physical device was erased. Read both the mode and outcome.
 
 The JSON export contains the following fields. Preserve unknown fields when
 building an integration, and check `schema_version` before relying on a layout.
+The [machine-readable schema](report.schema.json) describes version 1; the
+application exports records but does not load this schema or import reports.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -85,6 +90,23 @@ operation, dropping whole lines to keep within the limit. Progress event lines
 drive the progress display and are not included in this diagnostic log. Do not
 assume the export contains every message from a long-running operation. HTML
 presents the main fields and log; JSON carries the full structured record.
+
+## Example records
+
+These are fictional documentation examples using demo-file targets, fixed UUIDs,
+and illustrative timings and logs. They are not evidence of a real erase:
+
+| Example | What to inspect |
+| --- | --- |
+| [Completed and verified JSON](examples/completed.json) | `outcome: completed` with requested and completed verification |
+| [Failed JSON](examples/failed.json) | `outcome: failed`; requested verification did not complete |
+| [Cancelled JSON](examples/cancelled.json) | `outcome: cancelled`; some data may already have been overwritten |
+| [Printable HTML](examples/completed.html) | The completed example rendered by the project's report generator; download and open it in a browser |
+
+The schema permits additional fields so readers can retain information added by
+later producers. Validation checks structure and field relationships, not the
+truth of an operation or the authenticity of a record. A valid demo record still
+describes only a demonstration.
 
 ## What a report establishes
 

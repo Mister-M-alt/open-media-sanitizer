@@ -10,7 +10,7 @@ protective check. Capture the exact message before changing the environment.
 
 | Symptom | What to check |
 | --- | --- |
-| GitHub shows 404 or no release assets | Sign in with an account that has access to the private repository; check the [release page](https://github.com/Mister-M-alt/open-media-sanitizer/releases/tag/v0.3.0-preview.1) |
+| GitHub shows 404 or no release assets | Check the exact tag on the [releases page](https://github.com/Mister-M-alt/open-media-sanitizer/releases); expand **Assets** and retry a failed download |
 | Checksum verification fails | Download the image and `SHA256SUMS` from the same release again; do not use a file with a mismatched checksum |
 | Missing C compiler, Make, GTK, or JSON-GLib | Install the [desktop dependencies](../README.md#run-on-an-existing-linux-desktop); development packages are needed to compile |
 | Root launcher asks you to build first | Run `make` as your regular user before launching the already-built binaries with elevated privileges |
@@ -75,6 +75,7 @@ contains the current OS, use separate boot media. There is no force/bypass flag.
 | Verification mismatch | Returned data did not match the pattern; save diagnostics and investigate the storage path |
 | Stop takes time | Blocking I/O or flushing can delay cancellation; powering off cannot restore already overwritten data |
 | Report export fails | Use a writable regular-file destination with space available, separate from the target; a symlink or device is rejected |
+| Report USB cannot be mounted | Use an existing FAT32 or ext4 partition and follow the [mounting walkthrough](boot-images.md#save-reports-to-a-second-drive); exFAT and NTFS are not supported consistently across the preview images |
 | Reports are gone after restart | History is session-local; boot session storage is RAM-backed unless explicitly exported elsewhere |
 | HTML says read-back was not verified | Check `verification_requested`, `verification_completed`, method, and outcome in JSON; it may have been disabled or the run failed |
 

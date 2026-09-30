@@ -3,9 +3,9 @@
 [Documentation index](README.md) · [Boot image guide](boot-images.md) · [Developer guide](development.md)
 
 This guide is for people building system images, adding hardware support, or
-preparing downloads. Use the operator guide for day-to-day operation. The current
-repository and release are private; publishing a release within the repository
-does not change its visibility.
+preparing downloads. Use the operator guide for day-to-day operation. The
+repository and published release assets are public, so source bundles and
+validation evidence must contain only material intended for distribution.
 
 ## Build inputs and outputs
 
@@ -154,8 +154,8 @@ controllers.
 6. Create a draft prerelease tied to the full reviewed commit SHA. Describe
    firmware combinations actually tested, physical-hardware limits, source
    contents, and changes users need to know. Publish when the complete asset
-   set is uploaded and verified; retain private repository visibility until a
-   separate decision to make it public.
+   set is uploaded and verified. Link the source commit and retained evidence
+   from the [validation record](validation.md), and update the [changelog](../CHANGELOG.md).
 
 A documentation update on `main` does not change an existing release's image,
 source bundle, or tag. Keep published assets associated with the source that

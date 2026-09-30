@@ -9,14 +9,16 @@ the desktop additionally uses GTK 3, GLib/GIO, and JSON-GLib.
 
 ## Get a checkout
 
-Repository access is required while the project is private. With Git and GitHub
-SSH authentication configured:
+Clone the public repository with Git; reading it does not require authentication:
 
 ```sh
-git clone git@github.com:Mister-M-alt/open-media-sanitizer.git
+git clone https://github.com/Mister-M-alt/open-media-sanitizer.git
 cd open-media-sanitizer
 git switch -c my-change
 ```
+
+To submit a pull request, fork the repository into your GitHub account and push
+your branch there. See the [contribution guidelines](../CONTRIBUTING.md).
 
 Install the [Linux development dependencies](../README.md#run-on-an-existing-linux-desktop).
 For graphical tests, also install Xvfb and xauth. On Debian/Ubuntu:

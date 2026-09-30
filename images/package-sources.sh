@@ -11,7 +11,7 @@ mkdir -p "$artifacts"
 "$project/images/toolchain-sources.sh" "$arch"
 # Buildroot local packages have no upstream tarball. Include their exact source
 # and the image build recipes alongside Buildroot's dependency source archive.
-tar -cJf "$artifacts/oms-source.tar.xz" -C "$project" src include tests Makefile start.sh README.md CONTRIBUTING.md SECURITY.md LICENSE LICENSE-APACHE LICENSE-MIT images docs .github .dockerignore .gitignore
+tar -cJf "$artifacts/oms-source.tar.xz" -C "$project" src include tests Makefile start.sh README.md CHANGELOG.md CONTRIBUTING.md SECURITY.md LICENSE LICENSE-APACHE LICENSE-MIT images docs .github .dockerignore .gitignore
 XZ_OPT='-T4 -1' tar --exclude='legal-info/sources/toolchain-external-bootlin-*' -cJf "$artifacts/dependency-sources.tar.xz" -C "$output" legal-info
 cp "$project/.image-cache/buildroot-2025.02.18.tar.xz" "$artifacts/"
 cp "$output/legal-info/manifest.csv" "$artifacts/dependency-manifest.csv"

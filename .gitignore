@@ -4,3 +4,8 @@
 *~
 /.image-cache/
 /image-output/
+
+# Local reference documents and private working files are not project sources.
+/*.pdf
+/*.docx
+/private/

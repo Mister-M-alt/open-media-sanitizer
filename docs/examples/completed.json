@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "id": "00000000-0000-4000-8000-000000000001",
+  "application": "Open Media Sanitizer",
+  "mode": "demo",
+  "started_at": "2026-09-21T12:00:00Z",
+  "finished_at": "2026-09-21T12:00:01Z",
+  "elapsed_seconds": 1.0,
+  "target": {
+    "path": "/tmp/oms-demo-EXAMPLE/sample-1.img",
+    "model": "Fictional documentation example",
+    "kind": "file",
+    "size_bytes": 33554432,
+    "read_only": false,
+    "mounted": false,
+    "swap_active": false,
+    "has_holders": false,
+    "removable": false,
+    "identity": "0:1:2:33554432:0"
+  },
+  "method": "zero",
+  "passes": 1,
+  "verification_requested": true,
+  "verification_completed": true,
+  "outcome": "completed",
+  "exit_code": 0,
+  "log": [
+    "FICTIONAL DOCUMENTATION EXAMPLE: no operation was performed for this record.",
+    "Illustrates a successful zero write and read-back on a disposable demo file."
+  ],
+  "scope": "This record describes writes to the exposed logical address range. It does not certify sanitization of hidden, remapped, or overprovisioned storage."
+}

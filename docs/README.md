@@ -8,19 +8,24 @@ The bootable edition includes Linux, so it can run without an installed OS.
 
 These guides describe version 0.3.0 and the current `main` branch. For a released
 image, use the documentation at its release tag and retain its matching source
-bundle. Access to this repository and its downloads currently requires a GitHub
-account with permission to the private repository.
+bundle. Source and release assets are public downloads; running the application
+does not require an account or activation.
 
 ## Choose a starting point
 
 | Reader | Suggested path | What you will learn |
 | --- | --- | --- |
 | First-time user | [Operator guide](operator-guide.md) → demo | How to select a sample, confirm a write, and save a record without choosing real hardware |
+| Evaluating the tool | [Scope and media support](scope.md) → [alternatives](../README.md#alternatives) | What OMS can do for each medium and which other tools to consider |
 | Technician or operator | [Operator guide](operator-guide.md) → [boot images](boot-images.md) → [reports](reports.md) | How to prepare, operate, cancel, export, and shut down |
 | System administrator or integrator | [CLI reference](cli-reference.md) → [troubleshooting](troubleshooting.md) | Exact options, output, status codes, and diagnostic steps |
 | Reviewer or person receiving reports | [Reports](reports.md) → [review notes](review.md) | What a result means, what was tested, and what the record cannot prove |
 | C developer or contributor | [Developer guide](development.md) → [contributing](../CONTRIBUTING.md) | Dependencies, source structure, tests, and change expectations |
 | Image builder or release maintainer | [Boot images](boot-images.md) → [maintainer guide](maintenance.md) | Target profiles, build artifacts, validation, sources, and release preparation |
+
+See the [changelog](../CHANGELOG.md) for release changes and the
+[validation record](validation.md) for the preview's source commit, checksums,
+and available test evidence.
 
 ## What is included
 

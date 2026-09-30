@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/Mister-M-alt/open-media-sanitizer/main/docs/report.schema.json",
+  "title": "Open Media Sanitizer operation record, schema version 1",
+  "description": "Structure of a desktop export. Validation does not authenticate the record or establish sanitization.",
+  "type": "object",
+  "required": [
+    "schema_version", "id", "application", "mode", "started_at", "finished_at",
+    "elapsed_seconds", "target", "method", "passes", "verification_requested",
+    "verification_completed", "outcome", "exit_code", "log", "scope"
+  ],
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "application": { "type": "string", "const": "Open Media Sanitizer" },
+    "mode": { "type": "string", "enum": ["demo", "live"] },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "elapsed_seconds": { "type": "number", "minimum": 0 },
+    "target": {
+      "type": "object",
+      "required": [
+        "path", "model", "kind", "size_bytes", "read_only", "mounted",
+        "swap_active", "has_holders", "removable", "identity"
+      ],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "model": { "type": "string" },
+        "kind": { "type": "string", "enum": ["block", "file"] },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "read_only": { "type": "boolean" },
+        "mounted": { "type": "boolean" },
+        "swap_active": { "type": "boolean" },
+        "has_holders": { "type": "boolean" },
+        "removable": { "type": "boolean" },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "method": { "type": "string", "enum": ["zero", "ones", "random"] },
+    "passes": { "type": "integer", "minimum": 1, "maximum": 16 },
+    "verification_requested": { "type": "boolean" },
+    "verification_completed": { "type": "boolean" },
+    "outcome": { "type": "string", "enum": ["completed", "failed", "cancelled"] },
+    "exit_code": { "type": "integer", "minimum": -1 },
+    "log": { "type": "array", "items": { "type": "string" } },
+    "scope": { "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "method": { "const": "random" } } },
+      "then": { "properties": { "verification_requested": { "const": false } } }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": { "const": "completed" },
+          "verification_requested": { "const": true }
+        }
+      },
+      "then": { "properties": { "verification_completed": { "const": true } } },
+      "else": { "properties": { "verification_completed": { "const": false } } }
+    },
+    {
+      "if": { "properties": { "outcome": { "const": "completed" } } },
+      "then": { "properties": { "exit_code": { "const": 0 } } }
+    }
+  ]
+}
